@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 def display_banner():
     """Prints the application's welcome banner."""
     print("\n" + "="*60)
-    print(" Ultra-Fast RS55 Scanner & Advanced Analyzer (v3.0)")
+    print(" Ultra-Fast RS55 Scanner & Advanced Analyzer (v3.1)")
     print("="*60)
 
 def get_date_input(benchmark_data):
@@ -41,27 +41,30 @@ def get_date_input(benchmark_data):
         choice = input("Enter your choice (1-6): ").strip()
 
         try:
-            latest_date = benchmark_data.index.max().to_pydatetime()
+            latest_date = benchmark_data.index.max().tz_convert('Asia/Kolkata')
+            def make_tz_aware(dt):
+                return pd.to_datetime(dt).tz_localize('Asia/Kolkata')
+
             if choice == '1':
                 date_str = input("Enter date (ddmmyy): ")
-                return [datetime.strptime(date_str, '%d%m%y')]
+                return [make_tz_aware(datetime.strptime(date_str, '%d%m%y'))]
             elif choice == '2':
                 start_str, end_str = input("Enter start and end dates (ddmmyy ddmmyy): ").split()
                 start_date = datetime.strptime(start_str, '%d%m%y')
                 end_date = datetime.strptime(end_str, '%d%m%y')
-                return pd.date_range(start_date, end_date).to_pydatetime().tolist()
+                return [make_tz_aware(d) for d in pd.date_range(start_date, end_date)]
             elif choice == '3':
                 n_days = int(input("Enter number of days: "))
-                return benchmark_data.index[-n_days:].to_pydatetime().tolist()
+                return benchmark_data.index[-n_days:].tz_convert('Asia/Kolkata').to_pydatetime().tolist()
             elif choice == '4':
                 return [latest_date]
             elif choice == '5':
-                return [benchmark_data.index[-2].to_pydatetime()]
+                return [benchmark_data.index[-2].tz_convert('Asia/Kolkata')]
             elif choice == '6':
                 today = datetime.now()
-                if today.hour < 16: # Check if market might still be open
+                if today.hour < 16:
                     log.warning("Market may still be open. Using yesterday's data for consistency.")
-                    return [benchmark_data.index[-2].to_pydatetime()]
+                    return [benchmark_data.index[-2].tz_convert('Asia/Kolkata')]
                 return [latest_date]
             else:
                 log.error("Invalid choice. Please enter a number between 1 and 6.")
@@ -106,21 +109,30 @@ def run_initial_scan():
 def run_advanced_scan():
     """Orchestrates the advanced HHHL + ADX scan on an existing output file."""
     log.info("Searching for initial scan results in the 'results/' directory...")
-    result_files = glob.glob('results/RS55_Scan_*.xlsx')
+    result_files = sorted(glob.glob('results/RS55_Scan_*.xlsx'), reverse=True)
     if not result_files:
         log.error("No initial scan result files found. Please run the 'RS55 Scan' first.")
         return
 
     print("\n--- Please select an input file for the advanced scan ---")
-    for i, f in enumerate(result_files):
+    for i, f in enumerate(result_files[:10]): # Show latest 10 files
         print(f"{i+1}. {os.path.basename(f)}")
 
     try:
-        choice = int(input("Enter file number: ")) - 1
+        choice = int(input(f"Enter file number (1-{len(result_files[:10])}): ")) - 1
         input_file = result_files[choice]
     except (ValueError, IndexError):
         log.error("Invalid selection.")
         return
+
+    # Get portfolio inputs
+    try:
+        portfolio_value = float(input("Enter portfolio value (e.g., 1000000): ") or "1000000")
+        risk_per_trade = float(input("Enter risk per trade %% (e.g., 1 for 1%%): ") or "1") / 100
+    except ValueError:
+        log.error("Invalid input. Using default portfolio values.")
+        portfolio_value = 1000000
+        risk_per_trade = 0.01
 
     log.info(f"Loading symbols from '{os.path.basename(input_file)}'...")
     df_input = pd.read_excel(input_file, engine='openpyxl')
@@ -129,13 +141,10 @@ def run_advanced_scan():
     scan_date = pd.to_datetime(df_input['Date'].iloc[0]).tz_localize('Asia/Kolkata')
 
     log.info(f"Found {len(symbols_to_scan)} symbols. Fetching full historical data up to {scan_date.strftime('%Y-%m-%d')}...")
-    # We need to download data up to the scan date, not today's date.
-    # The download_all_data function uses a fixed period, which is fine,
-    # as we will filter the data later.
     download_all_data(symbols_to_scan)
     market_data, _ = load_all_data(symbols_to_scan)
 
-    scanner = AdvancedScanner(portfolio_value=1000000, risk_per_trade=0.01) # Example values
+    scanner = AdvancedScanner(portfolio_value=portfolio_value, risk_per_trade=risk_per_trade)
     df_advanced_results = scanner.run_advanced_scan(market_data, rs_lookup, scan_date)
 
     if not df_advanced_results.empty:
@@ -146,7 +155,6 @@ def run_advanced_scan():
         display_advanced_summary(df_advanced_results, df_signals, scanner.portfolio_value)
     else:
         log.info("No stocks passed the advanced scanning criteria.")
-
 
 # --- Main Application Workflow ---
 def main():
