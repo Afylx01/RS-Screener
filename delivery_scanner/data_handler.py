@@ -4,7 +4,7 @@ import os
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from pathlib import Path
 
 # Assuming config.py is in the parent directory
@@ -165,7 +165,7 @@ def persist_to_sqlite(df: pd.DataFrame):
         with engine.begin() as conn:
             # Append data and create an index for faster queries
             df.to_sql("daily_bhav", conn, if_exists="append", index=False)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol_date ON daily_bhav (symbol, date)")
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_symbol_date ON daily_bhav (symbol, date)"))
         log.info(f"Persisted {len(df)} rows to the 'daily_bhav' table.")
     except Exception as e:
         log.error(f"Failed to persist data to SQLite database: {e}")
@@ -190,7 +190,7 @@ def deduplicate_database():
         # Overwrite the table with the deduplicated data
         with engine.begin() as conn:
             df_dedup.to_sql("daily_bhav", conn, if_exists="replace", index=False)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol_date ON daily_bhav (symbol, date)")
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_symbol_date ON daily_bhav (symbol, date)"))
 
         log.info(f"Deduplication complete. Original rows: {len(df)}, Final rows: {len(df_dedup)}")
     except Exception as e:
