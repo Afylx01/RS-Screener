@@ -16,6 +16,7 @@ from config import (
     DATA_PERIOD,
     DATA_INTERVAL,
     USD_TO_INR,
+    FETCH_MARKET_CAP
 )
 
 # Configure logging
@@ -99,27 +100,28 @@ def download_all_data(symbols):
                 ticker = future_to_ticker[future]
                 log.error(f'{ticker} generated an exception during OHLCV download: {exc}')
 
-    log.info("Starting parallel download for market cap data...")
-    market_caps = {}
-    # Use a more constrained number of workers for market cap to avoid API rate limiting
-    market_cap_workers = max(1, SCAN_CONFIG["max_workers_download"] // 2)
-    with ThreadPoolExecutor(max_workers=market_cap_workers) as executor:
-        future_to_market_cap = {executor.submit(get_market_cap, ticker): ticker for ticker in symbols}
-        for future in tqdm(as_completed(future_to_market_cap), total=len(symbols), desc="[2/2] Fetching Market Caps"):
-            try:
-                market_cap = future.result()
-                if market_cap is not None:
+    if FETCH_MARKET_CAP:
+        log.info("Starting parallel download for market cap data...")
+        market_caps = {}
+        # Use a more constrained number of workers for market cap to avoid API rate limiting
+        market_cap_workers = max(1, SCAN_CONFIG["max_workers_download"] // 2)
+        with ThreadPoolExecutor(max_workers=market_cap_workers) as executor:
+            future_to_market_cap = {executor.submit(get_market_cap, ticker): ticker for ticker in symbols}
+            for future in tqdm(as_completed(future_to_market_cap), total=len(symbols), desc="[2/2] Fetching Market Caps"):
+                try:
+                    market_cap = future.result()
+                    if market_cap is not None:
+                        ticker = future_to_market_cap[future]
+                        market_caps[ticker] = market_cap
+                except Exception as exc:
                     ticker = future_to_market_cap[future]
-                    market_caps[ticker] = market_cap
-            except Exception as exc:
-                ticker = future_to_market_cap[future]
-                log.error(f'{ticker} generated an exception during market cap fetch: {exc}')
+                    log.error(f'{ticker} generated an exception during market cap fetch: {exc}')
 
-    # Cache the successfully fetched market caps
-    if market_caps:
-        market_cap_cache_file = CACHE_DIR / "market_caps.json"
-        pd.Series(market_caps).to_json(market_cap_cache_file)
-        log.info(f"Successfully cached market caps for {len(market_caps)} symbols.")
+        # Cache the successfully fetched market caps
+        if market_caps:
+            market_cap_cache_file = CACHE_DIR / "market_caps.json"
+            pd.Series(market_caps).to_json(market_cap_cache_file)
+            log.info(f"Successfully cached market caps for {len(market_caps)} symbols.")
 
 def load_data(ticker):
     """
@@ -145,12 +147,13 @@ def load_all_data(symbols):
             data[symbol] = df
 
     market_caps = {}
-    market_cap_cache_file = CACHE_DIR / "market_caps.json"
-    if market_cap_cache_file.exists():
-        log.info("Loading market caps from cache.")
-        market_caps = pd.read_json(market_cap_cache_file, typ='series').to_dict()
-    else:
-        log.warning("Market cap cache file not found.")
+    if FETCH_MARKET_CAP:
+        market_cap_cache_file = CACHE_DIR / "market_caps.json"
+        if market_cap_cache_file.exists():
+            log.info("Loading market caps from cache.")
+            market_caps = pd.read_json(market_cap_cache_file, typ='series').to_dict()
+        else:
+            log.warning("Market cap cache file not found.")
 
     return data, market_caps
 

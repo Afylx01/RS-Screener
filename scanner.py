@@ -1,7 +1,7 @@
 import pandas as pd
 from tqdm import tqdm
 
-from config import SCAN_CONFIG, DATA_REQUIREMENTS
+from config import SCAN_CONFIG, DATA_REQUIREMENTS, FETCH_MARKET_CAP
 
 def run_scan(all_stock_data, market_caps, scan_date):
     """
@@ -14,10 +14,13 @@ def run_scan(all_stock_data, market_caps, scan_date):
 
         day_data = data.loc[scan_date]
 
-        # Condition 1: Market Cap
-        market_cap = market_caps.get(symbol, 0)
-        if market_cap < SCAN_CONFIG['min_market_cap']:
-            continue
+        # Condition 1: Market Cap (Conditional)
+        if FETCH_MARKET_CAP:
+            market_cap = market_caps.get(symbol, 0)
+            if market_cap < SCAN_CONFIG['min_market_cap']:
+                continue
+        else:
+            market_cap = 0 # Default value when not fetched
 
         # Condition 2: 14-day RSI > 50
         if day_data['rsi_14'] <= 50:
