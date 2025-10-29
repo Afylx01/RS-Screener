@@ -9,11 +9,16 @@ BASE_DIR = Path(__file__).parent
 CACHE_DIR = BASE_DIR / "cache"
 RESULTS_DIR = BASE_DIR / "results"
 ADVANCED_RESULTS_DIR = BASE_DIR / "advanced_results"
+DELIVERY_SCANNER_DIR = BASE_DIR / "delivery_scanner_results"
+DELIVERY_DATA_DIR = BASE_DIR / "delivery_data"
+
 
 # Create directories if they don't exist
 CACHE_DIR.mkdir(exist_ok=True)
 RESULTS_DIR.mkdir(exist_ok=True)
 ADVANCED_RESULTS_DIR.mkdir(exist_ok=True)
+DELIVERY_SCANNER_DIR.mkdir(exist_ok=True)
+DELIVERY_DATA_DIR.mkdir(exist_ok=True)
 
 
 # --- Feature Flags ---
@@ -48,6 +53,28 @@ SCAN_CONFIG = {
 "retry_delay": 1,
 }
 
+# --- Delivery Scanner Configuration ---
+DELIVERY_SCAN_CONFIG = {
+    # Delivery Filters
+    "min_delivery_quantity": 10000,
+    "min_percent_change": 0.0,
+    "min_delivery_times": 3.0,
+    # Market Cap Filter
+    "min_market_cap_cr": 100.0,
+    # Number of workers for market cap fetching
+    "market_cap_workers": 10,
+    # Technical Indicators
+    "rs_period": 55,
+    "rsi_period": 14,
+    # System Defaults
+    "days_back": 8,
+    "bhavcopy_base_url": "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{date}.csv",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "timeout": 15,
+    "sqlite_db_name": "bhavcopy.sqlite",
+}
+
+
 # Realistic data requirements
 DATA_REQUIREMENTS = {
 "min_days_rsi14": 25,
@@ -76,6 +103,13 @@ OUTPUT_SETTINGS = {
 "generate_tradingview_links": True,
 "show_rs55_details": True,
 }
+
+# Telegram Configuration
+TELEGRAM_CONFIG = {
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",  # Replace with your bot token
+    "chat_id": "YOUR_TELEGRAM_CHAT_ID",      # Replace with your chat ID
+}
+
 
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

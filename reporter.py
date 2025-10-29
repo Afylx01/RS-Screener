@@ -1,8 +1,9 @@
 import pandas as pd
 from datetime import datetime
 import os
+import requests
 from openpyxl.styles import PatternFill, Font, Alignment
-from config import RESULTS_DIR, OUTPUT_SETTINGS
+from config import RESULTS_DIR, OUTPUT_SETTINGS, TELEGRAM_CONFIG, DELIVERY_SCANNER_DIR
 
 def generate_tradingview_link(symbol):
     cleaned_symbol = symbol.replace(".NS", "")
@@ -106,3 +107,67 @@ def display_advanced_summary(df_scan: pd.DataFrame, df_signals: pd.DataFrame, po
         print("="*60)
         print(f"Portfolio Value: ₹{portfolio_value:,.0f}")
         print(f"Total Allocation: ₹{total_allocation:,.0f} ({(total_allocation/portfolio_value)*100:.1f}%)")
+
+def save_delivery_scan_results(df: pd.DataFrame, target_date: datetime):
+    """Saves the high-delivery scan results to a formatted Excel file."""
+    if df.empty:
+        print("No stocks met the delivery scan criteria.")
+        return None
+
+    filename = f"High_Delivery_Scan_{target_date.strftime('%Y%m%d')}.xlsx"
+    output_path = DELIVERY_SCANNER_DIR / filename
+
+    # Add TradingView links
+    df['tradingview_link'] = df['symbol'].apply(generate_tradingview_link)
+
+    # Round numeric columns for cleaner output
+    numeric_cols = [
+        'close', 'prev_close', 'delivery_qty', 'pct_change',
+        'avg_delivery_5d_prior', 'delivery_times', 'delivery_value_cr',
+        'market_cap_cr', 'rsi', 'rs'
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').round(2)
+
+    try:
+        with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='High_Delivery_Stocks', index=False)
+            # Apply formatting
+            workbook = writer.book
+            worksheet = writer.sheets['High_Delivery_Stocks']
+            header_format = workbook.add_format({
+                'bold': True, 'text_wrap': True, 'valign': 'top',
+                'fg_color': '#4F81BD', 'font_color': 'white', 'border': 1
+            })
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+            worksheet.autofit()
+        print(f"Delivery scan results saved to: {output_path}")
+        return output_path
+    except Exception as e:
+        print(f"Failed to save delivery scan results to Excel: {e}")
+        return None
+
+def send_telegram_report(file_path: str, caption: str):
+    """Sends the specified file to the Telegram channel."""
+    if not all([TELEGRAM_CONFIG['bot_token'], TELEGRAM_CONFIG['chat_id']]):
+        print("Telegram credentials are not configured. Skipping notification.")
+        return
+
+    bot_token = TELEGRAM_CONFIG['bot_token']
+    chat_id = TELEGRAM_CONFIG['chat_id']
+    url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+
+    try:
+        with open(file_path, 'rb') as doc:
+            files = {'document': doc}
+            data = {'chat_id': chat_id, 'caption': caption}
+            response = requests.post(url, data=data, files=files, timeout=20)
+
+        if response.status_code == 200:
+            print("Successfully sent report to Telegram.")
+        else:
+            print(f"Failed to send report to Telegram. Status: {response.status_code}, Response: {response.text}")
+    except Exception as e:
+        print(f"An error occurred while sending Telegram notification: {e}")
