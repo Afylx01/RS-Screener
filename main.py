@@ -2,6 +2,13 @@ import logging
 import sys
 import os
 import glob
+import warnings
+# Suppress the specific UserWarning from pandas_ta
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=".*pkg_resources is deprecated.*"
+)
 from datetime import datetime
 import pandas as pd
 from config import SCAN_CONFIG, LOG_LEVEL, LOG_FORMAT
@@ -116,20 +123,32 @@ def run_initial_scan():
 
 def run_delivery_scan():
     """Orchestrates the complete High-Delivery scan workflow."""
-    # Since this scan depends on bhavcopy, it needs a single target date.
-    # We can use the existing menu but will only use the LATEST selected date.
     log.info("Preparing for High-Delivery Scan. Please select a target date.")
+    benchmark_symbol = SCAN_CONFIG['benchmark_symbol']
 
-    # We need a benchmark to use the date selection menu, even if it's not used for RS calculations here.
     try:
-        _, benchmark_data = load_all_data([SCAN_CONFIG['benchmark_symbol']])
-        scan_dates = get_date_input(benchmark_data[SCAN_CONFIG['benchmark_symbol']])
+        # Try to load benchmark data from cache
+        benchmark_data, _ = load_all_data([benchmark_symbol])
+
+        # If it's not in the cache, download it
+        if benchmark_symbol not in benchmark_data:
+            log.info(f"Benchmark data for '{benchmark_symbol}' not found in cache. Downloading now...")
+            download_all_data([benchmark_symbol])
+            benchmark_data, _ = load_all_data([benchmark_symbol]) # Reload after downloading
+
+        # If it's still not available, we can't proceed
+        if benchmark_symbol not in benchmark_data:
+            log.error(f"Critical: Failed to download or load benchmark data for '{benchmark_symbol}'. Cannot proceed.")
+            return
+
+        scan_dates = get_date_input(benchmark_data[benchmark_symbol])
         if not scan_dates:
             return
-        target_date = scan_dates[-1] # Use the latest date from the selection
+        target_date = scan_dates[-1]  # Use the latest date from the selection
         log.info(f"High-Delivery Scan will run for the target date: {target_date.strftime('%Y-%m-%d')}")
+
     except Exception as e:
-        log.error(f"Could not prepare dates for the scan. Please run the initial RS55 scan first to cache data. Error: {e}")
+        log.error(f"An unexpected error occurred while preparing dates for the scan: {e}", exc_info=True)
         return
 
     # 1. Prepare the database (downloads, cleans, persists bhavcopy data)
@@ -171,15 +190,19 @@ def run_advanced_scan_on_file(input_file: str):
         risk_per_trade = 0.01
 
     log.info(f"Loading symbols from '{os.path.basename(input_file)}'...")
-    # The delivery scanner uses 'symbol', not 'Symbol'
     df_input = pd.read_excel(input_file, engine='openpyxl')
-    if 'symbol' not in df_input.columns:
-        log.error("The input file is missing the required 'symbol' column.")
+
+    # --- Standardize column names from different scan outputs ---
+    if 'Symbol' in df_input.columns and 'RS55_Today' in df_input.columns:
+        # This is an RS55 Scan file
+        df_input.rename(columns={'Symbol': 'symbol', 'RS55_Today': 'rs', 'Date': 'date'}, inplace=True)
+    elif 'symbol' not in df_input.columns or 'rs' not in df_input.columns:
+        log.error("The input file is missing the required symbol and RS columns.")
         return
 
     symbols_to_scan = (df_input['symbol'] + ".NS").tolist()
-    # The delivery scanner has 'rs', not 'RS55_Today'
     rs_lookup = dict(zip(df_input['symbol'], df_input['rs']))
+    # The date column might be 'date' (from delivery scan) or 'Date' (from RS55 scan, now renamed)
     scan_date = pd.to_datetime(df_input['date'].iloc[0]).tz_localize('Asia/Kolkata')
 
     log.info(f"Found {len(symbols_to_scan)} symbols. Fetching full historical data up to {scan_date.strftime('%Y-%m-%d')}...")
