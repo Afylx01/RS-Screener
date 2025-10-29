@@ -128,6 +128,7 @@ def load_data(ticker):
     cache_file = CACHE_DIR / f"{ticker}.parquet"
     if cache_file.exists():
         df = pd.read_parquet(cache_file)
+        df.columns = [col.lower() for col in df.columns]  # Ensure lowercase columns
         df.ffill(inplace=True)  # Forward-fill any missing values
         return df
     return None

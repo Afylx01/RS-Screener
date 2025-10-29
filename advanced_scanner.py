@@ -127,5 +127,8 @@ class AdvancedScanner:
                     indicators.update(position_info)
             results.append(indicators)
 
+        if not results:
+            return pd.DataFrame()
+
         df_results = pd.DataFrame(results).sort_values('score', ascending=False)
         return df_results
