@@ -124,7 +124,7 @@ def save_delivery_scan_results(df: pd.DataFrame, target_date: datetime):
     numeric_cols = [
         'close', 'prev_close', 'delivery_qty', 'pct_change',
         'avg_delivery_5d_prior', 'delivery_times', 'delivery_value_cr',
-        'market_cap_cr', 'rsi', 'rs'
+        'market_cap_cr', 'rs', 'rsi'
     ]
     for col in numeric_cols:
         if col in df.columns:

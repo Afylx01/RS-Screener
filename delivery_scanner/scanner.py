@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, date as datetime_date
 from sqlalchemy import create_engine
 from config import DELIVERY_SCAN_CONFIG, DELIVERY_DATA_DIR
+from delivery_scanner.enrichment import enrich_with_technical_indicators
 
 log = logging.getLogger(__name__)
 
@@ -93,14 +94,14 @@ def create_scan_snapshot(target_date: datetime_date) -> pd.DataFrame:
             log.error(f"An error occurred while creating the scan snapshot: {e}")
         return pd.DataFrame()
 
-def apply_initial_filters(df_snapshot: pd.DataFrame) -> pd.DataFrame:
+def apply_scan_filters(df_snapshot: pd.DataFrame) -> pd.DataFrame:
     """
-    Applies the core delivery-based filters based on the settings in config.py.
+    Applies all core delivery and technical filters based on the settings in config.py.
     """
     if df_snapshot.empty:
         return df_snapshot
 
-    log.info("Applying initial delivery and price filters...")
+    log.info("Applying all scan filters (delivery and technical)...")
     initial_count = len(df_snapshot)
 
     # --- Filtering Logic ---
@@ -123,8 +124,19 @@ def apply_initial_filters(df_snapshot: pd.DataFrame) -> pd.DataFrame:
     df_filtered = df_filtered[df_filtered["avg_delivery_5d_prior"].notna()]
     log.info(f"Filter 'valid_avg_delivery': {len(df_filtered)} stocks remaining")
 
+    # --- New Technical Filters ---
+    # Filter 5: Minimum RS (Relative Strength)
+    min_rs = DELIVERY_SCAN_CONFIG.get('min_rs', 0) # Use .get for safety
+    df_filtered = df_filtered[df_filtered["rs"].fillna(-1) >= min_rs]
+    log.info(f"Filter 'min_rs' >= {min_rs}: {len(df_filtered)} stocks remaining")
+
+    # Filter 6: Minimum RSI (Relative Strength Index)
+    min_rsi = DELIVERY_SCAN_CONFIG.get('min_rsi', 55) # Use .get for safety
+    df_filtered = df_filtered[df_filtered["rsi"].fillna(0) >= min_rsi]
+    log.info(f"Filter 'min_rsi' >= {min_rsi}: {len(df_filtered)} stocks remaining")
+
     final_count = len(df_filtered)
-    log.info(f"Initial filtering complete. Total stocks passed: {final_count} out of {initial_count}")
+    log.info(f"All filtering complete. Total stocks passed: {final_count} out of {initial_count}")
 
     return df_filtered.copy()
 
@@ -140,8 +152,14 @@ def run_delivery_scan_core(target_date: datetime) -> pd.DataFrame:
     # 1. Create the snapshot for the target date
     df_snapshot = create_scan_snapshot(scan_date)
 
-    # 2. Apply the initial filters to get the preliminary list
-    df_filtered = apply_initial_filters(df_snapshot)
+    if df_snapshot.empty:
+        return pd.DataFrame()
+
+    # 2. Enrich the snapshot with technical indicators (RS and RSI)
+    df_with_technicals = enrich_with_technical_indicators(df_snapshot)
+
+    # 3. Apply all filters (delivery and new technical filters)
+    df_filtered = apply_scan_filters(df_with_technicals)
 
     log.info("--- Core Delivery Scan Analysis Complete ---")
 
