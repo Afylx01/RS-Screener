@@ -21,8 +21,8 @@ def calculate_average_delivery_prior_days(target_date: datetime_date) -> pd.Data
     engine = get_db_engine()
 
     try:
-        # Load all data prior to the target date
-        query = f"SELECT symbol, date, delivery_qty FROM daily_bhav WHERE date < '{target_date}'"
+        # Load all data prior to the target date, using the date() function for comparison
+        query = f"SELECT symbol, date, delivery_qty FROM daily_bhav WHERE date(date) < '{target_date}'"
         df_prior = pd.read_sql(query, engine, parse_dates=['date'])
 
         if df_prior.empty:
@@ -59,8 +59,8 @@ def create_scan_snapshot(target_date: datetime_date) -> pd.DataFrame:
     engine = get_db_engine()
 
     try:
-        # Get all data for the target date
-        query = f"SELECT * FROM daily_bhav WHERE date = '{target_date}'"
+        # Get all data for the target date, using the date() function for comparison
+        query = f"SELECT * FROM daily_bhav WHERE date(date) = '{target_date}'"
         df_snapshot = pd.read_sql(query, engine, parse_dates=['date'])
 
         if df_snapshot.empty:
