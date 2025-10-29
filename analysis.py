@@ -100,7 +100,7 @@ class HHHLScanner:
                 return None
 
             df_analysis = df.tail(self.lookback_days).copy()
-            prices = df_analysis['Close'].values
+            prices = df_analysis['close'].values
             dates = df_analysis.index.values
 
             if len(prices) == 0 or np.isnan(prices).any():

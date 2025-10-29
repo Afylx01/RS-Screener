@@ -73,6 +73,7 @@ def download_stock_data(ticker, cache_days):
             stock = yf.Ticker(ticker)
             data = stock.history(period=DATA_PERIOD, interval=DATA_INTERVAL, auto_adjust=False, back_adjust=True)
             if not data.empty:
+                data.columns = [col.lower() for col in data.columns]
                 data.to_parquet(cache_file)
                 log.debug(f"Successfully downloaded and cached data for {ticker}.")
                 return data
