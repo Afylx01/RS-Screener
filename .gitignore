@@ -7,3 +7,4 @@ __pycache__/
 # Cache and results directories
 cache/
 results/
+advanced_results/

@@ -24,7 +24,6 @@ def display_banner():
 
 def run_initial_scan():
     """Orchestrates the initial RS55 scan."""
-    # Logic from the old main function, streamlined
     symbols = get_stock_symbols()
     if not symbols:
         log.error("Could not retrieve stock symbols. Exiting.")
@@ -69,7 +68,7 @@ def run_advanced_scan():
         return
 
     log.info(f"Loading symbols from '{os.path.basename(input_file)}'...")
-    df_input = pd.read_excel(input_file)
+    df_input = pd.read_excel(input_file, engine='openpyxl')
     symbols_to_scan = (df_input['Symbol'] + ".NS").tolist()
     rs_lookup = dict(zip(df_input['Symbol'], df_input['RS55_Today']))
 
@@ -88,7 +87,6 @@ def run_advanced_scan():
         display_advanced_summary(df_advanced_results, df_signals, scanner.portfolio_value)
     else:
         log.info("No stocks passed the advanced scanning criteria.")
-
 
 # --- Main Application Workflow ---
 def main():

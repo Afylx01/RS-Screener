@@ -43,7 +43,7 @@ class AdvancedScanner:
             'close': latest['close'],
             'ema_21': latest['ema_21'],
             'ema_200': latest['ema_200'],
-            'atr_14': latest['atrr_14'],
+            'atr_14': latest['atr_14'],
             'rsi_14': latest['rsi_14'],
             'adx': latest['adx_14'],
             'plus_di': latest['dmp_14'],
@@ -60,7 +60,7 @@ class AdvancedScanner:
 
     def apply_filters(self, indicators: Dict) -> bool:
         if not indicators: return False
-        if indicators.get('hhhl_trend') != 'UPTREND': return False
+        if indicators.get('trend') != 'UPTREND': return False
         if (indicators.get('close') or 0) < (indicators.get('ema_200') or float('inf')): return False
         if (indicators.get('adx') or 0) < 20: return False
         if (indicators.get('plus_di') or 0) < (indicators.get('minus_di') or float('inf')): return False
