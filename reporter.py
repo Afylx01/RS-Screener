@@ -28,6 +28,9 @@ def format_results(results_df):
     if OUTPUT_SETTINGS['generate_tradingview_links']:
         results_df['TradingView_Link'] = results_df['Symbol'].apply(generate_tradingview_link)
 
+    # Clean up the Symbol column by removing the .NS suffix
+    results_df['Symbol'] = results_df['Symbol'].str.replace(".NS", "", regex=False)
+
     return results_df
 
 def save_results(results_df, scan_date):
